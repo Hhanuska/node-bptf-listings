@@ -1,6 +1,6 @@
 # @Hhanuska/node-bptf-listings
 
-node-bptf-listings by Nicklason with heavily improved performance and support for more items from node-bptf-listings-2
+node-bptf-listings by [Nicklason](https://github.com/Nicklason) with heavily improved performance and support for more items from [node-bptf-listings-2](https://github.com/TF2Autobot/node-bptf-listings-2)
 
 ## Getting started
 
