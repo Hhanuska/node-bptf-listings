@@ -121,6 +121,7 @@ class Listing {
             listing.sku = this.getSKU();
         } else {
             listing.id = this.item.id;
+			listing.sku = this.getSKU();
         }
 
         ['currencies', 'details', 'offers', 'buyout'].forEach((property) => {

@@ -137,8 +137,11 @@ class ListingManager {
      */
     _updateInventory (callback) {
         const options = {
-            method: 'GET',
-            url: `https://backpack.tf/_inventory/${this.steamid.getSteamID64()}`,
+            method: 'POST',
+            url: `https://backpack.tf/api/inventory/${this.steamid.getSteamID64()}/refresh`,
+            qs: {
+                token: this.token
+            },
             gzip: true,
             json: true
         };
@@ -148,15 +151,15 @@ class ListingManager {
                 return callback(err);
             }
 
-            if (body.status.id == -1) {
-                return callback(new Error(body.status.text + ' (' + body.status.extra + ')'));
+            if (response.status >= 400) {
+                return callback(new Error(response.status + ' (' + response.statusText + ')'));
             }
 
-            const time = moment.unix(body.time.timestamp);
+            const time = moment.unix(body.last_update);
 
             if (this._lastInventoryUpdate === null) {
                 this._lastInventoryUpdate = time;
-            } else if (body.fallback.available === false && time.unix() !== this._lastInventoryUpdate.unix()) {
+            } else if (time.unix() !== this._lastInventoryUpdate.unix()) {
                 // The inventory has updated on backpack.tf
                 this._lastInventoryUpdate = time;
 
@@ -205,7 +208,15 @@ class ListingManager {
             // Populate map
             this._listings = {};
             this.listings.forEach((listing) => {
-                this._listings[listing.intent == 0 ? listing.getName() : listing.item.id] = listing;
+                // this._listings[listing.intent == 0 ? listing.getName() : listing.item.id] = listing;
+				
+				const name = listing.getName();
+				
+				if (this._listings[name] === undefined) {
+					this._listings[name] = [];
+				}
+				
+				this._listings[name].push(listing);
             });
 
             this._createdListingsCount = 0;
@@ -214,7 +225,7 @@ class ListingManager {
             this.actions.create.forEach((formatted) => {
                 if (formatted.retry !== undefined) {
                     // Look for a listing that has a matching sku / id
-                    const match = this.findListing(formatted.intent == 0 ? formatted.sku : formatted.id, formatted.intent);
+                    const match = this.findListing(formatted.sku, formatted.intent, formatted.intent == 1 ? formatted.id : null);
                     if (match !== null) {
                         // Found match, remove the listing and unset retry property
                         match.remove();
@@ -232,13 +243,31 @@ class ListingManager {
 
     /**
      * Searches for one specific listing by sku or assetid
-     * @param {String|Number} search sku or assetid
+     * @param {String} sku sku
      * @param {Number} intent 0 for buy, 1 for sell
+	 * @param {Number} assetid needed for intent 1 only
      * @return {Listing} Returns matching listing
      */
-    findListing (search, intent) {
-        const identifier = intent == 0 ? this.schema.getName(SKU.fromString(search)) : search;
-        return this._listings[identifier] === undefined ? null : this._listings[identifier];
+    findListing (sku, intent, assetid) {
+        // const identifier = intent == 0 ? this.schema.getName(SKU.fromString(search)) : search;
+        // return this._listings[identifier] === undefined ? null : this._listings[identifier];
+		if (intent === 1 && !assetid) {
+			throw new Error('Missing assetid in findListing');
+		}
+		
+		const name = this.schema.getName(SKU.fromString(sku));
+		
+		const listings = this._listings[name] || [];
+		
+		for (let i = 0; i < listings.length; i++) {
+			const listing = listings[i];
+			
+			if (listing.intent == intent && (intent == 0 || assetid == listing.item.id)) {
+				return listing;
+			}
+		}
+		
+		return null;
     }
 
     /**
@@ -247,11 +276,33 @@ class ListingManager {
      * @return {Array<Listing>} Returns matching listings
      */
     findListings (sku) {
+		const name = this.schema.getName(SKU.fromString(sku))
+		
+		return this._listings[name] ? this._listings[name] : [];
+		
+		/*
+		const array = [];
+		
+		for (let i = 0; i <= 1; i++) {
+			const listing = this.findListing(sku, i);
+			
+			if (listing === null) {
+				continue;
+			}
+			
+			array.push(listing);
+		}
+		
+		return array;
+		*/
+		
+		/*
         const name = this.schema.getName(SKU.fromString(sku));
 
         return this.listings.filter((listing) => {
             return listing.getName() === name;
         });
+		*/
     }
 
     /**
@@ -268,7 +319,7 @@ class ListingManager {
         const remove = [];
 
         formattedArr.forEach((formatted) => {
-            const match = this.findListing(formatted.intent == 1 ? formatted.id : formatted.sku, formatted.intent);
+            const match = this.findListing(formatted.sku, formatted.intent, formatted.intent == 1 ? formatted.id : null);
             if (match !== null) {
                 remove.push(match.id);
             }
@@ -290,7 +341,7 @@ class ListingManager {
         const formatted = this._formatListing(listing);
 
         if (formatted !== null) {
-            const match = this.findListing(formatted.intent == 1 ? formatted.id : formatted.sku, formatted.intent);
+            const match = this.findListing(formatted.sku, formatted.intent, formatted.intent == 1 ? formatted.id : null);
             if (match !== null) {
                 match.remove();
             }
@@ -567,12 +618,19 @@ class ListingManager {
 
                         // Find listing matching the identifier in create queue
                         const match = this.actions.create.find((formatted) => this._isSameByIdentifier(formatted, formatted.intent, identifier));
+						
+						if (!match) {
+							console.log('!!!');
+						}
 
                         if (match !== undefined) {
                             // If we can't find the listing, then it was already removed / we can't identify the item / we can't properly list the item (FISK!!!)
                             retryListings.push(match.intent == 0 ? identifier: match.id);
                         }
-                    }
+                    } else {
+						console.log('Not accounted for: ');
+						console.log(listing, listing.error);
+					}
                 } else {
                     this._createdListingsCount++;
                 }
@@ -747,7 +805,18 @@ class ListingManager {
         }, false);
 
         const formatted = {
-            item_name: name
+            item_name: 
+                name.toLowerCase().includes('unusualifier') && item.target !== null
+                    ? 'Unusualifier'
+                      : name.toLowerCase().includes('strangifier') && item.target !== null
+                      ? 'Strangifier'
+                      : name.toLowerCase().includes('fabricator') && item.outputQuality !== null && item.output !== null && item.target !== null
+                      ? 'Fabricator'
+                      : name.toLowerCase().includes('kit') && item.killstreak !== null && item.target !== null
+                      ? 'Kit'
+                      : name.toLowerCase().includes('chemistry set') && (item.output !== null || item.target !== null) && item.outputQuality !== null
+                      ? 'Chemistry Set'
+                      : name
         };
 
         formatted.quality = (item.quality2 !== null ? this.schema.getQualityById(item.quality2) + ' ' : '') + this.schema.getQualityById(item.quality);
@@ -758,6 +827,20 @@ class ListingManager {
 
         if (item.effect !== null) {
             formatted.priceindex = item.effect;
+        } else if (item.crateseries !== null) {
+            formatted.priceindex = item.crateseries;
+        } else if ((name.toLowerCase().includes('unusualifier') || name.toLowerCase().includes('strangifier')) && item.target !== null) {
+            formatted.priceindex = item.target;
+        } else if (name.toLowerCase().includes('fabricator') && item.outputQuality !== null && item.output !== null && item.target !== null) {
+            // fabricator
+            formatted.priceindex = `${item.output}-${item.outputQuality}-${item.target}`;
+        } else if (name.toLowerCase().includes('kit') && item.killstreak !== null && item.target !== null) {
+            // killstreak kit
+            formatted.priceindex = `${item.killstreak}-${item.target}`;
+        } else if (name.toLowerCase().includes('chemistry set')) {
+            // Chemistry Set Collector's (item.output)
+            // Chemistry Set Strangifier (item.target)
+            formatted.priceindex = `${item.target === null ? item.output : item.target}-${item.outputQuality}`
         }
 
         return formatted;
