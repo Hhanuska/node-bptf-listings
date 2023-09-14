@@ -130,26 +130,36 @@ class ListingManager {
      * Initializes the module
      * @param {Function} callback
      */
-    init(callback) {
+    async init(callback) {
         if (this.ready) {
             callback(null);
-            return;
+            return null;
         }
 
         if (!this.steamid.isValid()) {
-            callback(new Error('Invalid / missing steamid64'));
-            return;
+            const err = new Error('Invalid / missing steamid64');
+            callback(err);
+            return err;
         }
 
         if (this.schema === null) {
-            callback(new Error('Missing schema from tf2-schema'));
-            return;
+            const err = new Error('Missing schema from tf2-schema');
+            callback(err);
+            return err;
         }
 
-        this.manager
-            .healthCheck()
-            .then(resp => callback(null))
-            .catch(err => callback(err));
+        try {
+            await this.manager.addToken(this.steamid, this.token);
+            await this.manager.refreshListingLimits(this.steamid);
+            await this.manager.startAgent(this.steamid, this.userAgent);
+            await this.manager.startInventoryRefresh(this.steamid);
+        } catch (err) {
+            callback(err);
+            return err;
+        }
+
+        callback(null);
+        return null;
     }
 
     /**
