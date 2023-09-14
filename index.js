@@ -163,67 +163,6 @@ class ListingManager {
     }
 
     /**
-     * (Re)-register user-agent to backpack.tf.
-     * @description Bumps listings and gives you lightning icon on listings if you have set a tradeofferurl in your settings (https://backpack.tf/settings)
-     * @param {Function} callback
-     */
-    registerUserAgent(callback) {
-        if (!this.token) {
-            callback(new Error('No token set (yet)'));
-            return;
-        }
-
-        const options = this.setRequestOptions('POST', '/agent/pulse');
-
-        axios(options)
-            .then(response => {
-                const body = response.data;
-
-                this.emit('pulse', {
-                    status: body.status,
-                    current_time: body.current_time,
-                    expire_at: body.expire_at,
-                    client: body.client
-                });
-
-                return callback(null, body);
-            })
-            .catch(err => {
-                if (err) {
-                    return callback(err);
-                }
-            });
-    }
-
-    /**
-     * Unregister user-agent to backpack.tf.
-     * @description Prematurely declare the user as no longer being under control of the user agent. Should be used as part of a clean shutdown.
-     * @param {Function} callback
-     */
-    stopUserAgent(callback) {
-        if (!this.token) {
-            callback(new Error('No token set (yet)'));
-            return;
-        }
-
-        const options = this.setRequestOptions('POST', '/agent/stop');
-
-        axios(options)
-            .then(response => {
-                const body = response.data;
-
-                this.emit('pulse', { status: body.status });
-
-                return callback(null, body);
-            })
-            .catch(err => {
-                if (err) {
-                    return callback(err);
-                }
-            });
-    }
-
-    /**
      * Get the batch operation limit
      * @param {Function} callback
      */
@@ -647,7 +586,7 @@ class ListingManager {
     /**
      * Stops all timers and timeouts and clear values to default
      */
-    shutdown() {
+    async shutdown() {
         // Stop timers
         clearTimeout(this._timeout);
         clearInterval(this._updateListingsInterval);
@@ -656,18 +595,18 @@ class ListingManager {
         clearInterval(this._getBatchOpLimitInterval);
         clearInterval(this._checkArchivedListingsFailedToDeleteInterval);
 
-        this.stopUserAgent(() => {
-            // Reset values
-            this.ready = false;
-            this.listings = [];
-            this.cap = null;
-            this.promotes = null;
-            this.actions = { create: [], remove: [], update: [] };
-            this._actions = { create: {}, remove: {}, update: {} };
-            this._checkArchivedListingsFailedToDeleteInterval = {};
-            this._lastInventoryUpdate = null;
-            this._createdListingsCount = 0;
-        });
+        await this.manager.stopAgent(this.steamid);
+
+        // Reset values
+        this.ready = false;
+        this.listings = [];
+        this.cap = null;
+        this.promotes = null;
+        this.actions = { create: [], remove: [], update: [] };
+        this._actions = { create: {}, remove: {}, update: {} };
+        this._checkArchivedListingsFailedToDeleteInterval = {};
+        this._lastInventoryUpdate = null;
+        this._createdListingsCount = 0;
     }
 
     /**

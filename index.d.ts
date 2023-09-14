@@ -42,18 +42,9 @@ declare class ListingManager extends EventEmitter {
 
     _inventoryInterval: ReturnType<typeof setInterval>;
 
-    init(callback: (err: any) => void): void;
+    async init(callback: (err: any) => void): void;
 
     setUserID(userID: string): void;
-
-    registerUserAgent(
-        callback: (
-            err: any,
-            body?: { status: string; current_time?: number; expire_at?: number; client?: string }
-        ) => void
-    ): void;
-
-    stopUserAgent(callback: (err: any, body?: { status: string }) => void): void;
 
     getListings(onShutdown: boolean, callback: (err: any, body?: any) => any): void;
 
@@ -75,7 +66,7 @@ declare class ListingManager extends EventEmitter {
 
     deleteAllListings(intent: number, callback: (err: any, body?: any) => any): void;
 
-    shutdown(): void;
+    async shutdown(): void;
 
     _processActions: (callback: (err?: Error) => void) => void;
 
