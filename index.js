@@ -167,6 +167,8 @@ class ListingManager {
             3 * 60 * 1000
         );
 
+        this.ready = true;
+
         callback(null);
         return null;
     }
