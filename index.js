@@ -296,8 +296,13 @@ class ListingManager {
         const skuArr = formattedArr.map(formatted => formatted.sku);
 
         const createDtoArr = formattedArr.map((formatted, index) => {
+            // sku should be undefined if we want multiple sell orders for the same item
+            // eg. autobot sell item by id (!add id=assetid)
             if (formatted.intent === 1 && formatted.sku) {
+                // if intent is sell, check if we already have a sell listing for sku
+                // to make sure we don't create multiple sell listings for the same sku
                 if (this.sellListings[formatted.sku] && formatted.id !== this.sellListings[formatted.sku]) {
+                    // change assetid to the id of the already exisiting listing
                     formatted.id = this.sellListings[formatted.sku];
                 }
             }
@@ -328,48 +333,7 @@ class ListingManager {
      * @param {Object} listing
      */
     createListing(listing) {
-        if (!this.ready) {
-            throw new Error('Module has not been successfully initialized');
-        }
-
-        const formatted = this._formatListing(listing);
-
-        if (!formatted) {
-            // invalid listing
-            return;
-        }
-
-        const sku = formatted.sku;
-        delete formatted.sku;
-
-        // sku should be undefined if we want multiple sell orders for the same item
-        // eg. autobot sell item by id (!add id=assetid)
-        if (formatted.intent === 1 && sku) {
-            // if intent is sell, check if we already have a sell listing for sku
-            // to make sure we don't create multiple sell listings for the same sku
-            if (this.sellListings[sku] && formatted.id !== this.sellListings[sku]) {
-                // change assetid to the id of the already exisiting listing
-                formatted.id = this.sellListings[sku];
-            }
-        }
-
-        const createDTO = {
-            listing: formatted,
-            priority: listing.priority,
-            force: listing.force
-        };
-
-        this.manager
-            .addDesiredListings(this.steamid, [createDTO])
-            .then(listings => {
-                if (formatted.intent === 1) {
-                    // save sell listing assetid for sku
-                    this.sellListings[sku] = formatted.id;
-                }
-            })
-            // only possible error should be bptf-manager not responding
-            // wait and try again
-            .catch(err => setTimeout(this.createListing.bind(this, listing), 1000));
+        return this.createListings([listing]);
     }
 
     /**
