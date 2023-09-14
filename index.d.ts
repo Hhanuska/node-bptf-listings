@@ -69,7 +69,7 @@ declare class ListingManager extends EventEmitter {
 
     removeListing(listingId: string): void;
 
-    removeListings(...listings: (string|ListingManager.Listing)[]): void;
+    removeListings(...listings: (string | ListingManager.Listing)[]): void;
 
     deleteAllListings(callback: (err: any, body?: any) => any): void;
 
@@ -161,6 +161,39 @@ declare namespace ListingManager {
         data: Record<string, any>;
     }
 
+    interface CreateListingDTO {
+        listing: BpCreateListingDTO;
+        priority?: number;
+        force?: boolean;
+    }
+
+    type BpCreateListingDTO = {
+        currencies: TF2Currencies;
+        offers?: 0 | 1;
+        buyout?: 0 | 1;
+        promoted?: 0 | 1;
+        details?: string;
+    } & ({ id: string } | { item: Record<string, unknown> });
+
+    type DesiredListing = {
+        hash: string;
+        id: string | null;
+        updatedAt: number;
+        lastAttemptedAt?: number;
+        error?: string;
+    } & CreateListingDTO;
+
+    type RemoveListingDTO =
+        | {
+              hash: string;
+          }
+        | {
+              id: string;
+          }
+        | {
+              item: Record<string, unknown>;
+          };
+
     export class Listing {
         id: string;
 
@@ -205,6 +238,35 @@ declare namespace ListingManager {
         }): void;
 
         remove(): void;
+    }
+
+    export class Manager {
+        constructor(url: string);
+
+        async healthCheck(): Promise<string>;
+
+        async addToken(steamid: string, token: string): Promise<null>;
+
+        async startAgent(
+            steamid: string,
+            agent?: string
+        ): Promise<{ steamid64: string; userAgent: string | null; updatedAt: number }>;
+
+        async stopAgent(steamid: string): Promise<null>;
+
+        async startInventoryRefresh(steamid: string): Promise<null>;
+
+        async refreshListingLimits(steamid: string): Promise<null>;
+
+        async getListingLimits(
+            steamid: string
+        ): Promise<{ cap: number; used: number; promoted: number; updatedAt: number }>;
+
+        async addDesiredListings(steamid: string, listings: CreateListingDTO[]): Promise<DesiredListing[]>;
+
+        async removeDesiredListing(steamid: string, listings: RemoveListingDTO[]): Promise<null>;
+
+        async getDesiredListings(steamid: string): Promise<DesiredListing[]>;
     }
 }
 

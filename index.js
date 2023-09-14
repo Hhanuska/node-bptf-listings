@@ -10,6 +10,7 @@ const EventEmitter = require('events').EventEmitter;
 const Listing = require('./classes/listing');
 
 const EFailiureReason = require('./resources/EFailureReason');
+const { Manager } = require('./classes/manager');
 
 async function axios(options) {
     try {
@@ -43,6 +44,8 @@ class ListingManager {
     /**
      * Creates a new instance of the listing manager
      * @param {Object} options
+     * @param {String} options.host Host of bptf-manager
+     * @param {Number} options.port Port of bptf-manager
      * @param {String} options.token The access token of the account being managed
      * @param {String} options.steamid The steamid of the account being managed
      * @param {String} options.userAgent The User-Agent header to be sent to bptf
@@ -52,7 +55,9 @@ class ListingManager {
      * @param {Object} options.schema Schema from the tf2-schema module (schemaManager.schema)
      */
     constructor(options) {
-        options = options || {};
+        if (!options.host || !options.port || !options.token || !options.steamid) {
+            throw new Error('Invalid ListingManager options');
+        }
 
         EventEmitter.call(this);
 
@@ -60,6 +65,8 @@ class ListingManager {
         this.steamid = new SteamID(options.steamid);
         this.userAgent = options.userAgent;
         this.userID = options.userID;
+
+        this.manager = new Manager(`http://${options.host}:${options.port}`);
 
         // Time to wait before sending request after enqueing action
         // Set default to 6 seconds:
@@ -139,32 +146,10 @@ class ListingManager {
             return;
         }
 
-        this.registerUserAgent(err => {
-            if (err) {
-                return callback(err);
-            }
-
-            this.getBatchOpLimit(err => {
-                if (err) {
-                    return callback(err);
-                }
-
-                this._updateInventory(() => {
-                    this._startTimers();
-
-                    this.ready = true;
-                    this.emit('ready');
-
-                    // Emit listings after initializing
-                    this.emit('listings', this.listings);
-
-                    // Start processing actions if there are any
-                    this._processActions();
-
-                    return callback(null);
-                });
-            });
-        });
+        this.manager
+            .healthCheck()
+            .then(resp => callback(null))
+            .catch(err => callback(err));
     }
 
     /**
