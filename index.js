@@ -163,34 +163,6 @@ class ListingManager {
     }
 
     /**
-     * Get the batch operation limit
-     * @param {Function} callback
-     */
-    getBatchOpLimit(callback) {
-        if (!this.token) {
-            callback(new Error('No token set (yet)'));
-            return;
-        }
-
-        const options = this.setRequestOptions('GET', '/v2/classifieds/listings/batch');
-        axios(options)
-            .then(response => {
-                const body = response.data;
-
-                this.batchSize = body.opLimit;
-
-                this.emit('batchLimit', body.opLimit);
-
-                return callback(null, body);
-            })
-            .catch(err => {
-                if (err) {
-                    return callback(err);
-                }
-            });
-    }
-
-    /**
      * Updates your inventory on backpack.tf
      * @param {Function} callback
      */
@@ -560,18 +532,6 @@ class ListingManager {
             ListingManager.prototype._updateListings.bind(this, () => {}),
             90000
         );
-        this._userAgentInterval = setInterval(
-            ListingManager.prototype._renewUserAgent.bind(this, () => {}),
-            360000 // 6 minutes
-        );
-        this._inventoryInterval = setInterval(
-            ListingManager.prototype._updateInventory.bind(this, () => {}),
-            180000 // 3 minutes
-        );
-        this._getBatchOpLimitInterval = setInterval(
-            ListingManager.prototype.getBatchOpLimit.bind(this, () => {}),
-            60000
-        );
         this._checkArchivedListingsFailedToDeleteInterval = setInterval(
             () => {
                 const listingIds = Object.keys(this.deleteArchivedFailedAttempt);
@@ -590,9 +550,6 @@ class ListingManager {
         // Stop timers
         clearTimeout(this._timeout);
         clearInterval(this._updateListingsInterval);
-        clearInterval(this._userAgentInterval);
-        clearInterval(this._inventoryInterval);
-        clearInterval(this._getBatchOpLimitInterval);
         clearInterval(this._checkArchivedListingsFailedToDeleteInterval);
 
         await this.manager.stopAgent(this.steamid);
