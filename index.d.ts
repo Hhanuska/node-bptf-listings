@@ -137,6 +137,8 @@ declare namespace ListingManager {
         promoted?: 0 | 1;
         currencies: TF2Currencies;
         time: number;
+        priority?: number;
+        force?: boolean;
     }
 
     interface UpdateListing {

@@ -99,6 +99,9 @@ class ListingManager {
             remove: {},
             update: {}
         };
+
+        // { [sku: string]: assetid }
+        this.sellListings = {};
     }
 
     setUserID(userID) {
@@ -288,17 +291,34 @@ class ListingManager {
 
         const formattedArr = listings.map(value => this._formatListing(value)).filter(formatted => formatted !== null);
 
-        const remove = [];
+        const skuArr = formattedArr.map(formatted => formatted.sku);
 
-        formattedArr.forEach(formatted => {
-            const match = this.findListing(formatted.intent === 0 ? formatted.sku : formatted.id);
-            if (match !== null) {
-                remove.push(match.id);
+        const createDtoArr = formattedArr.map((formatted, index) => {
+            if (formatted.intent === 1 && formatted.sku) {
+                if (this.sellListings[formatted.sku] && formatted.id !== this.sellListings[formatted.sku]) {
+                    formatted.id = this.sellListings[formatted.sku];
+                }
             }
+
+            delete formatted.sku;
+
+            return {
+                listing: formatted,
+                priority: listings[index].priority,
+                force: listings[index].force
+            };
         });
 
-        this._action('remove', remove);
-        this._action('create', formattedArr);
+        this.manager
+            .addDesiredListings(this.steamid, createDtoArr)
+            .then(desiredListings => {
+                formattedArr.forEach((formatted, index) => {
+                    if (formatted.intent === 1) {
+                        this.sellListings[skuArr[index]] = formatted.id;
+                    }
+                });
+            })
+            .catch(err => setTimeout(this.createListings.bind(this, listings), 1000));
     }
 
     /**
@@ -312,14 +332,42 @@ class ListingManager {
 
         const formatted = this._formatListing(listing);
 
-        if (formatted !== null) {
-            const match = this.findListing(formatted.intent === 0 ? formatted.sku : formatted.id);
-            if (match !== null && match.archived === false) {
-                match.remove();
-            }
-
-            this._action('create', formatted);
+        if (!formatted) {
+            // invalid listing
+            return;
         }
+
+        const sku = formatted.sku;
+        delete formatted.sku;
+
+        // sku should be undefined if we want multiple sell orders for the same item
+        // eg. autobot sell item by id (!add id=assetid)
+        if (formatted.intent === 1 && sku) {
+            // if intent is sell, check if we already have a sell listing for sku
+            // to make sure we don't create multiple sell listings for the same sku
+            if (this.sellListings[sku] && formatted.id !== this.sellListings[sku]) {
+                // change assetid to the id of the already exisiting listing
+                formatted.id = this.sellListings[sku];
+            }
+        }
+
+        const createDTO = {
+            listing: formatted,
+            priority: listing.priority,
+            force: listing.force
+        };
+
+        this.manager
+            .addDesiredListings(this.steamid, [createDTO])
+            .then(listings => {
+                if (formatted.intent === 1) {
+                    // save sell listing assetid for sku
+                    this.sellListings[sku] = formatted.id;
+                }
+            })
+            // only possible error should be bptf-manager not responding
+            // wait and try again
+            .catch(err => setTimeout(() => this.createListing.bind(this, listing), 1000));
     }
 
     /**
