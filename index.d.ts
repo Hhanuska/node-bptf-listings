@@ -56,9 +56,9 @@ declare class ListingManager extends EventEmitter {
 
     updateListing(listingId: string, properties: ListingManager.UpdateListing): void;
 
-    removeListing(listingId: string): void;
+    removeListing(listing: RemoveListing): void;
 
-    removeListings(...listings: (string | ListingManager.Listing)[]): void;
+    removeListings(listings: RemoveListing[]): void;
 
     deleteAllListings(callback: (err: any, body?: any) => any): void;
 
@@ -138,6 +138,12 @@ declare namespace ListingManager {
         currencies: TF2Currencies;
         priority?: number;
         force?: boolean;
+    }
+
+    interface RemoveListing {
+        id?: string;
+        sku?: string;
+        intent: 0 | 1;
     }
 
     interface UpdateListing {
