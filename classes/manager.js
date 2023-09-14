@@ -9,7 +9,7 @@ export class Manager {
         this.url = url;
 
         this.axios = axios.create({
-            baseUrl: this.url
+            baseURL: this.url
         });
     }
 
