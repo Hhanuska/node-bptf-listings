@@ -415,6 +415,15 @@ class ListingManager {
         this.removeListings([listing]);
     }
 
+    async removeAllListings() {
+        const listings = await this.manager.getDesiredListings(this.steamid);
+
+        await this.manager.removeDesiredListings(
+            this.steamid,
+            listings.map(listing => listing.hash)
+        );
+    }
+
     /**
      * Function used to enqueue jobs
      * @param {String} type
