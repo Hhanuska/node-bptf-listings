@@ -158,46 +158,14 @@ class ListingManager {
             return err;
         }
 
+        this._updateInventoryInterval = setInterval(
+            // interval time doesn't matter, bptf-manager will handle it
+            this.manager.startInventoryRefresh.bind(this.manager, this.steamid),
+            3 * 60 * 1000
+        );
+
         callback(null);
         return null;
-    }
-
-    /**
-     * Updates your inventory on backpack.tf
-     * @param {Function} callback
-     */
-    _updateInventory(callback) {
-        const options = this.setRequestOptions('POST', `/inventory/${this.steamid.getSteamID64()}/refresh`);
-
-        axios(options)
-            .then(response => {
-                const body = response.data;
-
-                if (response.status >= 400) {
-                    return callback(new Error(response.status + ' (' + response.statusText + ')'));
-                }
-
-                const time = body.last_update;
-
-                if (this._lastInventoryUpdate === null) {
-                    this._lastInventoryUpdate = time;
-                } else if (time !== this._lastInventoryUpdate) {
-                    // The inventory has updated on backpack.tf
-                    this._lastInventoryUpdate = time;
-
-                    this.emit('inventory', this._lastInventoryUpdate);
-
-                    // The inventory has been updated on backpack.tf, try and make listings
-                    this._processActions();
-                }
-
-                return callback(null);
-            })
-            .catch(err => {
-                if (err) {
-                    return callback(err);
-                }
-            });
     }
 
     /**
@@ -550,6 +518,7 @@ class ListingManager {
         // Stop timers
         clearTimeout(this._timeout);
         clearInterval(this._updateListingsInterval);
+        clearInterval(this._updateInventoryInterval);
         clearInterval(this._checkArchivedListingsFailedToDeleteInterval);
 
         await this.manager.stopAgent(this.steamid);
@@ -564,23 +533,6 @@ class ListingManager {
         this._checkArchivedListingsFailedToDeleteInterval = {};
         this._lastInventoryUpdate = null;
         this._createdListingsCount = 0;
-    }
-
-    /**
-     * Renew user-agent
-     * @param {Function} callback
-     */
-    _renewUserAgent(callback) {
-        async.series(
-            [
-                callback => {
-                    this.registerUserAgent(callback);
-                }
-            ],
-            err => {
-                return callback(err);
-            }
-        );
     }
 
     /**

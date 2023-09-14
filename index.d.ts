@@ -38,9 +38,7 @@ declare class ListingManager extends EventEmitter {
 
     _timeout: ReturnType<typeof setTimeout>;
 
-    _heartbeatInterval: ReturnType<typeof setInterval>;
-
-    _inventoryInterval: ReturnType<typeof setInterval>;
+    _updateInventoryInterval: ReturnType<typeof setInterval>;
 
     async init(callback: (err: any) => void): void;
 
