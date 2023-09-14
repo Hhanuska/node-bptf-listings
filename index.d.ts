@@ -16,6 +16,8 @@ declare class ListingManager extends EventEmitter {
         schema?: SchemaManager.Schema;
     });
 
+    manager: ListingManager.Manager;
+
     token: string | undefined;
 
     steamid: SteamID;
