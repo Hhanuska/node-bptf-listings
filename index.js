@@ -367,92 +367,50 @@ class ListingManager {
             })
             // only possible error should be bptf-manager not responding
             // wait and try again
-            .catch(err => setTimeout(() => this.createListing.bind(this, listing), 1000));
-    }
-
-    /**
-     * Enqueues a list of listings to be made
-     * @param {String} listing listing object
-     * @param {Object} properties properties
-     */
-    updateListing(listing, properties) {
-        if (!this.ready) {
-            throw new Error('Module has not been successfully initialized');
-        }
-
-        if (listing.archived) {
-            // if archived, we recreate it.
-            const toRecreate = Object.assign(
-                {},
-                {
-                    time: listing.time || Math.floor(new Date().getTime() / 1000),
-                    sku: listing.sku,
-                    intent: listing.intent,
-                    currencies: listing.currencies,
-                    details: listing.details
-                }
-            );
-
-            for (const key in properties) {
-                if (!properties.hasOwnProperty(key)) {
-                    continue;
-                }
-
-                toRecreate[key] = properties[key];
-            }
-
-            const formatted = this._formatListing(toRecreate);
-
-            if (formatted !== null) {
-                this._action('create', formatted);
-            }
-        } else {
-            const formatted = { id: listing.id, body: properties };
-
-            this._action('update', formatted);
-        }
+            .catch(err => setTimeout(this.createListing.bind(this, listing), 1000));
     }
 
     /**
      * Enqueus a list of listings or listing ids to be removed
-     * @param {Array<Object>|Array<String>} listings
+     * @param {Array<Object>} listings
      */
     removeListings(listings) {
         if (!this.ready) {
             throw new Error('Module has not been successfully initialized');
         }
 
-        const formatted = listings.map(value => (!isObject(value) ? value : value.id));
+        const formattedArr = listings.flatMap(listing => {
+            if (listing.intent === 1) {
+                const returnArr = [];
+                if (listing.sku && this.sellListings[listing.sku]) {
+                    returnArr.push({ id: this.sellListings[listing.sku] });
+                }
+                if (listing.id) {
+                    returnArr.push({ id: listing.id });
+                }
+            }
 
-        this._action('remove', formatted);
+            return this._formatItem({ sku: listing.sku });
+        });
+
+        this.manager
+            .removeDesiredListings(this.steamid, formattedArr)
+            .then(() => {
+                formattedArr.forEach((formatted, index) => {
+                    if (formatted.intent === 1 && listings[index].sku) {
+                        delete this.sellListings[listings[index].sku];
+                    }
+                });
+            })
+            .catch(err => setTimeout(this.removeListings.bind(this, listings)));
     }
 
     /**
      * Enqueus a list of listings or listing ids to be removed
-     * @param {Object|String} listing
+     * @param {Object} listing
      */
     removeListing(listing) {
-        if (!this.ready) {
-            throw new Error('Module has not been successfully initialized');
-        }
-
-        if (this.actions.create.length > 0) {
-            // remove from create queue
-            const sku = listing.getSKU();
-            const id = listing.id.replace('440_', ''); // we don't use for buy order
-            this.actions.create = this.actions.create.filter(formatted => {
-                return listing.intent === 0 ? sku !== formatted.sku : id !== formatted.id;
-            });
-        }
-
-        if (listing.archived) {
-            this._deleteArchived(listing.id);
-        }
-
-        // We will also call this no matter what because sometimes the listings that were archived
-        // earlier become active when there's enough pure, but in memory, it's still "archived",
-        // so it is not being removed.
-        this._action('remove', listing.id);
+        this.removeListings([listing]);
     }
 
     /**
@@ -1039,11 +997,6 @@ class ListingManager {
      * @return {Object} listing if formatted correctly, null if not
      */
     _formatListing(listing) {
-        if (listing.time === undefined) {
-            // If a time is not added then ignore the listing (this is to make sure that the listings are up to date)
-            return null;
-        }
-
         if (listing.intent == 0) {
             if (listing.sku === undefined) {
                 return null;
