@@ -807,6 +807,14 @@ class ListingManager {
             return;
         }
 
+        // Remove batch from actions before we start the request
+        // This will allow us to have multiple pending requests at the same time
+        // We need to re-add the listings to the queue if the request fails
+        this.actions.create = this.actions.create.filter(listing => {
+            delete this._actions.create[listing.intent === 0 ? listing.sku : listing.id];
+            return !batch.includes(listing);
+        });
+
         const options = this.setRequestOptions('POST', '/v2/classifieds/listings/batch', batch, 10000);
 
         axios(options)
@@ -841,7 +849,10 @@ class ListingManager {
                                 // This error should be extremely rare
 
                                 // Find listing matching the identifier in create queue
-                                const match = this.actions.create.find(formatted =>
+                                // const match = this.actions.create.find(formatted =>
+                                //     this._isSameByIdentifier(formatted, formatted.intent, identifier)
+                                // );
+                                const match = batch.find(formatted =>
                                     this._isSameByIdentifier(formatted, formatted.intent, identifier)
                                 );
 
@@ -862,22 +873,36 @@ class ListingManager {
                     this.emit('createListingsSuccessful', { created, archived, errors });
                 }
 
+                // this.actions.create = this.actions.create.filter(formatted => {
+                //     if (formatted.intent === 1 && waitForInventory.includes(formatted.id)) {
+                //         // We should wait for the inventory to update
+                //         formatted.attempt = this._lastInventoryUpdate;
+                //         return true;
+                //     }
+
+                //     if (
+                //         formatted.retry !== true &&
+                //         retryListings.includes(formatted.intent === 0 ? formatted.sku : formatted.id)
+                //     ) {
+                //         // A similar listing was already made, we will need to remove the old listing and then try and add this one again
+                //         formatted.retry = true;
+                //         return true;
+                //     }
+
+                //     const index = batch.findIndex(v => this._isSame(formatted, v));
+
+                //     if (index !== -1) {
+                //         // Listing was created, remove it from the batch and from the actions map
+                //         delete this._actions.create[formatted.intent === 0 ? formatted.sku : formatted.id];
+                //         batch.splice(index, 1);
+                //     }
+
+                //     return index === -1;
+                // });
+
                 this.actions.create = this.actions.create.filter(formatted => {
-                    if (formatted.intent === 1 && waitForInventory.includes(formatted.id)) {
-                        // We should wait for the inventory to update
-                        formatted.attempt = this._lastInventoryUpdate;
-                        return true;
-                    }
-
-                    if (
-                        formatted.retry !== true &&
-                        retryListings.includes(formatted.intent === 0 ? formatted.sku : formatted.id)
-                    ) {
-                        // A similar listing was already made, we will need to remove the old listing and then try and add this one again
-                        formatted.retry = true;
-                        return true;
-                    }
-
+                    // Check if the listing is in the create queue again
+                    // This is possible if it got added again between the time we sent the request and the time we got the response
                     const index = batch.findIndex(v => this._isSame(formatted, v));
 
                     if (index !== -1) {
@@ -889,25 +914,45 @@ class ListingManager {
                     return index === -1;
                 });
 
+                // Check which listings we should re-add to the queue
+                const readdToQueue = [];
+                batch.forEach(formatted => {
+                    if (formatted.intent === 1 && waitForInventory.includes(formatted.id)) {
+                        // We should wait for the inventory to update
+                        formatted.attempt = this._lastInventoryUpdate;
+                        readdToQueue.push(formatted);
+                        return;
+                    }
+
+                    if (
+                        formatted.retry !== true &&
+                        retryListings.includes(formatted.intent === 0 ? formatted.sku : formatted.id)
+                    ) {
+                        // A similar listing was already made, we will need to remove the old listing and then try and add this one again
+                        formatted.retry = true;
+                        readdToQueue.push(formatted);
+                        return;
+                    }
+                });
+
+                this.createListings(readdToQueue);
+
                 this.emit('actions', this.actions);
 
                 callback(null, body);
             })
             .catch(err => {
                 if (err) {
-                    if (err.response?.status === 504 || err.status === 504 || err.code === 'ECONNABORTED') {
-                        // Gateway Timeout / Timeout
-                        // The listings still might have been created, but we can't be sure
-                        // Remove the listings from the queue and add them to the end of the queue
-                        this.actions.create = this.actions.create.filter(formatted => {
-                            delete this._actions.create[formatted.intent === 0 ? formatted.sku : formatted.id];
-                            return !batch.includes(formatted);
-                        });
+                    // if (err.response?.status === 504 || err.status === 504 || err.code === 'ECONNABORTED') {
+                    //     // Gateway Timeout / Timeout
+                    //     // The listings still might have been created, but we can't be sure
+                    //     // Remove the listings from the queue and add them to the end of the queue
+                    //     this.actions.create = this.actions.create.concat(batch);
+                    // } else {
+                    //     this.actions.create = batch.concat(this.actions.create);
+                    // }
 
-                        this.actions.create = this.actions.create.concat(batch);
-
-                        this.emit('actions', this.actions);
-                    }
+                    this.createListings(batch);
 
                     this.emit('createListingsError', filterAxiosError(err));
                     return callback(err);
