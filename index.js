@@ -746,7 +746,6 @@ class ListingManager {
                             this.processingActionsUpdateDelete = false;
 
                             if (this.actions.remove.length !== 0 || this.actions.update.length !== 0) {
-                                this._processingActions = false;
                                 // There are still things to do
                                 this._processActions();
                                 callback(null);
