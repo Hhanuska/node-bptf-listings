@@ -766,7 +766,6 @@ class ListingManager {
             },
             (err, result) => {
                 // TODO: Only get listings if we created or deleted listings
-
                 // if (err?.response?.status === 429) {
                 //     // Too many request error
                 //     const s = err.response.data?.message?.match(/in \d+ second/);
@@ -775,13 +774,10 @@ class ListingManager {
                 //         : null;
                 //     this.sleepRateLimited = err.response.data?.retry_after || sleepTime || 10000;
                 //     this.isRateLimited = true;
-
                 //     this._processingActions = false;
                 //     this._processActions();
-
                 //     return callback(null);
                 // }
-
                 // if (
                 //     this.actions.remove.length !== 0 ||
                 //     this.actions.update.length !== 0 ||
@@ -798,12 +794,11 @@ class ListingManager {
                 //         callback(null);
                 //     });
                 // }
-
-                setTimeout(() => {
-                    this._processingActions = this._processingActions > 0 ? this._processingActions - 1 : 0;
-                }, 60 * 1000);
-
-                setTimeout(this._processActions.bind(this), 3000);
+                // Move this to _create
+                // setTimeout(() => {
+                //     this._processingActions = this._processingActions > 0 ? this._processingActions - 1 : 0;
+                // }, 60 * 1000);
+                // setTimeout(this._processActions.bind(this), 3000);
             }
         );
 
@@ -984,6 +979,13 @@ class ListingManager {
                     this.emit('createListingsError', filterAxiosError(err));
                     // return callback(err);
                 }
+            })
+            .finally(() => {
+                setTimeout(() => {
+                    this._processingActions = this._processingActions > 0 ? this._processingActions - 1 : 0;
+
+                    this._processActions();
+                }, 60 * 1000);
             });
 
         callback(null, null);
