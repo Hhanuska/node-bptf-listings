@@ -92,6 +92,8 @@ class ListingManager {
             remove: {},
             update: {}
         };
+
+        this._processingActions = 0;
     }
 
     setUserID(userID) {
@@ -719,12 +721,12 @@ class ListingManager {
             callback = noop;
         }
 
-        if (this._processingActions || this.isGettingListings) {
+        if (this._processingActions >= 10 || this.isGettingListings) {
             callback(null);
             return;
         }
 
-        this._processingActions = true;
+        this._processingActions++;
 
         setTimeout(
             () => {
@@ -743,37 +745,43 @@ class ListingManager {
                     (err, result) => {
                         // TODO: Only get listings if we created or deleted listings
 
-                        if (err?.response?.status === 429) {
-                            // Too many request error
-                            const s = err.response.data?.message?.match(/in \d+ second/);
-                            const sleepTime = s
-                                ? (parseInt(s[0].replace('in ', '').replace(' second', '')) + 1) * 1000
-                                : null;
-                            this.sleepRateLimited = err.response.data?.retry_after || sleepTime || 10000;
-                            this.isRateLimited = true;
+                        // if (err?.response?.status === 429) {
+                        //     // Too many request error
+                        //     const s = err.response.data?.message?.match(/in \d+ second/);
+                        //     const sleepTime = s
+                        //         ? (parseInt(s[0].replace('in ', '').replace(' second', '')) + 1) * 1000
+                        //         : null;
+                        //     this.sleepRateLimited = err.response.data?.retry_after || sleepTime || 10000;
+                        //     this.isRateLimited = true;
 
-                            this._processingActions = false;
-                            this._processActions();
+                        //     this._processingActions = false;
+                        //     this._processActions();
 
-                            return callback(null);
-                        }
+                        //     return callback(null);
+                        // }
 
-                        if (
-                            this.actions.remove.length !== 0 ||
-                            this.actions.update.length !== 0 ||
-                            this._listingsWaitingForRetry() - this.actions.create.length !== 0
-                        ) {
-                            this._processingActions = false;
-                            // There are still things to do
-                            this._processActions();
-                            callback(null);
-                        } else {
-                            // Queues are empty, get listings
-                            this.getListings(false, () => {
-                                this._processingActions = false;
-                                callback(null);
-                            });
-                        }
+                        // if (
+                        //     this.actions.remove.length !== 0 ||
+                        //     this.actions.update.length !== 0 ||
+                        //     this._listingsWaitingForRetry() - this.actions.create.length !== 0
+                        // ) {
+                        //     this._processingActions = false;
+                        //     // There are still things to do
+                        //     this._processActions();
+                        //     callback(null);
+                        // } else {
+                        //     // Queues are empty, get listings
+                        //     this.getListings(false, () => {
+                        //         this._processingActions = false;
+                        //         callback(null);
+                        //     });
+                        // }
+
+                        setTimeout(() => {
+                            this._processingActions = this._processingActions > 0 ? this._processingActions - 1 : 0;
+                        }, 60 * 1000);
+
+                        this._processActions();
                     }
                 );
             },
@@ -939,7 +947,7 @@ class ListingManager {
 
                 this.emit('actions', this.actions);
 
-                callback(null, body);
+                // callback(null, body);
             })
             .catch(err => {
                 if (err) {
@@ -955,9 +963,11 @@ class ListingManager {
                     this.createListings(batch);
 
                     this.emit('createListingsError', filterAxiosError(err));
-                    return callback(err);
+                    // return callback(err);
                 }
             });
+
+        callback(null, null);
     }
 
     /**
