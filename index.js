@@ -894,6 +894,20 @@ class ListingManager {
             })
             .catch(err => {
                 if (err) {
+                    if (err.response?.status === 504 || err.status === 504) {
+                        // Gateway Timeout
+                        // The listings still might have been created, but we can't be sure
+                        // Remove the listings from the queue and add them to the end of the queue
+                        this.actions.create = this.actions.filter(formatted => {
+                            delete this._actions.create[formatted.intent === 0 ? formatted.sku : formatted.id];
+                            return !batch.includes(formatted);
+                        });
+
+                        this.actions.create = this.actions.create.concat(batch);
+
+                        this.emit('actions', this.actions);
+                    }
+
                     this.emit('createListingsError', filterAxiosError(err));
                     return callback(err);
                 }
