@@ -823,7 +823,7 @@ class ListingManager {
             return !batch.includes(listing);
         });
 
-        const options = this.setRequestOptions('POST', '/v2/classifieds/listings/batch', batch, 10000);
+        const options = this.setRequestOptions('POST', '/v2/classifieds/listings/batch', batch);
 
         axios(options)
             .then(response => {
