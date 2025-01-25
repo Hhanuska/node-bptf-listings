@@ -109,7 +109,8 @@ class ListingManager {
             },
             params: {
                 token: this.token
-            }
+            },
+            timeoout: 10_000
         };
 
         if (body) {
