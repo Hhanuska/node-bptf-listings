@@ -98,7 +98,7 @@ class ListingManager {
         this.userID = userID;
     }
 
-    setRequestOptions(method, url, body) {
+    setRequestOptions(method, url, body, timeout = 0) {
         const options = {
             url: url,
             method,
@@ -110,7 +110,7 @@ class ListingManager {
             params: {
                 token: this.token
             },
-            timeout: 10_000
+            timeout: timeout
         };
 
         if (body) {
@@ -807,7 +807,7 @@ class ListingManager {
             return;
         }
 
-        const options = this.setRequestOptions('POST', '/v2/classifieds/listings/batch', batch);
+        const options = this.setRequestOptions('POST', '/v2/classifieds/listings/batch', batch, 10000);
 
         axios(options)
             .then(response => {
