@@ -760,12 +760,10 @@ class ListingManager {
             callback = noop;
         }
 
-        if (this._processingActions >= 10 || this.isGettingListings) {
+        if (this.isGettingListings) {
             callback(null);
             return;
         }
-
-        this._processingActions++;
 
         if (!this.processingActionsUpdateDelete) {
             this.processingActionsUpdateDelete = true;
@@ -782,13 +780,6 @@ class ListingManager {
                             }
                         },
                         (err, result) => {
-                            this.processingActionsUpdateDelete = false;
-
-                            if (this.actions.remove.length !== 0 || this.actions.update.length !== 0) {
-                                // There are still things to do
-                                this._processActions();
-                            }
-
                             if (
                                 err?.response?.status === 429 ||
                                 err === 'Rate limited, pausing sending requests to backpack.tf.'
@@ -801,7 +792,7 @@ class ListingManager {
                                 this.sleepRateLimited = err.response.data?.retry_after || sleepTime || 61 * 1000;
                                 this.isRateLimited = true;
 
-                                this._processingActions = false;
+                                this.processingActionsUpdateDelete = false;
                                 this._processActions();
 
                                 return callback(null);
@@ -812,14 +803,14 @@ class ListingManager {
                                 this.actions.update.length !== 0 ||
                                 this._listingsWaitingForRetry() - this.actions.create.length !== 0
                             ) {
-                                this._processingActions = false;
+                                this.processingActionsUpdateDelete = false;
                                 // There are still things to do
                                 this._processActions();
                                 callback(null);
                             } else {
                                 // Queues are empty, get listings
                                 this.getListings(false, () => {
-                                    this._processingActions = false;
+                                    this.processingActionsUpdateDelete = false;
                                     callback(null);
                                 });
                             }
@@ -830,49 +821,53 @@ class ListingManager {
             );
         }
 
-        async.series(
-            {
-                create: callback => {
-                    this._create(callback);
+        if (this._processingActions < 10) {
+            this._processingActions++;
+
+            async.series(
+                {
+                    create: callback => {
+                        this._create(callback);
+                    }
+                },
+                (err, result) => {
+                    // TODO: Only get listings if we created or deleted listings
+                    // if (err?.response?.status === 429) {
+                    //     // Too many request error
+                    //     const s = err.response.data?.message?.match(/in \d+ second/);
+                    //     const sleepTime = s
+                    //         ? (parseInt(s[0].replace('in ', '').replace(' second', '')) + 1) * 1000
+                    //         : null;
+                    //     this.sleepRateLimited = err.response.data?.retry_after || sleepTime || 10000;
+                    //     this.isRateLimited = true;
+                    //     this._processingActions = false;
+                    //     this._processActions();
+                    //     return callback(null);
+                    // }
+                    // if (
+                    //     this.actions.remove.length !== 0 ||
+                    //     this.actions.update.length !== 0 ||
+                    //     this._listingsWaitingForRetry() - this.actions.create.length !== 0
+                    // ) {
+                    //     this._processingActions = false;
+                    //     // There are still things to do
+                    //     this._processActions();
+                    //     callback(null);
+                    // } else {
+                    //     // Queues are empty, get listings
+                    //     this.getListings(false, () => {
+                    //         this._processingActions = false;
+                    //         callback(null);
+                    //     });
+                    // }
+                    // Move this to _create
+                    // setTimeout(() => {
+                    //     this._processingActions = this._processingActions > 0 ? this._processingActions - 1 : 0;
+                    // }, 60 * 1000);
+                    // setTimeout(this._processActions.bind(this), 3000);
                 }
-            },
-            (err, result) => {
-                // TODO: Only get listings if we created or deleted listings
-                // if (err?.response?.status === 429) {
-                //     // Too many request error
-                //     const s = err.response.data?.message?.match(/in \d+ second/);
-                //     const sleepTime = s
-                //         ? (parseInt(s[0].replace('in ', '').replace(' second', '')) + 1) * 1000
-                //         : null;
-                //     this.sleepRateLimited = err.response.data?.retry_after || sleepTime || 10000;
-                //     this.isRateLimited = true;
-                //     this._processingActions = false;
-                //     this._processActions();
-                //     return callback(null);
-                // }
-                // if (
-                //     this.actions.remove.length !== 0 ||
-                //     this.actions.update.length !== 0 ||
-                //     this._listingsWaitingForRetry() - this.actions.create.length !== 0
-                // ) {
-                //     this._processingActions = false;
-                //     // There are still things to do
-                //     this._processActions();
-                //     callback(null);
-                // } else {
-                //     // Queues are empty, get listings
-                //     this.getListings(false, () => {
-                //         this._processingActions = false;
-                //         callback(null);
-                //     });
-                // }
-                // Move this to _create
-                // setTimeout(() => {
-                //     this._processingActions = this._processingActions > 0 ? this._processingActions - 1 : 0;
-                // }, 60 * 1000);
-                // setTimeout(this._processActions.bind(this), 3000);
-            }
-        );
+            );
+        }
 
         if (this.isRateLimited) {
             this.isRateLimited = false;
